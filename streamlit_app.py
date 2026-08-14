@@ -7,7 +7,7 @@ st.title(":cup_with_straw: Pending Smoothie Orders! :cup_with_straw:")
 st.write("Orders that need to be filled.")
 
 # Connect to Snowflake
-cnx = st.connection("snowf lake")
+cnx = st.connection("snowflake")
 session = cnx. session()
 
 # Load only unfilled orders
