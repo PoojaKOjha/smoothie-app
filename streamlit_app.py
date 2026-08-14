@@ -16,21 +16,20 @@ my_dataframe = session.table("smoothies.public.fruit_options").select(
 
 st.dataframe(data=my_dataframe, use_container_width=True)
 
+# Convert Snowpark DataFrame to pandas DataFrame
+df = my_dataframe.to_pandas()
+
 # Multiselect shows FRUIT_NAME
 ingredient_list = st.multiselect(
     'Choose up to 5 ingredients:',
-    my_dataframe['FRUIT_NAME'].tolist(),
+    df['FRUIT_NAME'].tolist(),
     max_selections=5
 )
 
 # Convert chosen fruit names into their SEARCH_ON values
 if ingredient_list:
     search_values = (
-        my_dataframe
-        .filter(col('FRUIT_NAME').isin(ingredient_list))
-        .select(col('SEARCH_ON'))
-        .to_pandas()['SEARCH_ON']
-        .tolist()
+        df[df['FRUIT_NAME'].isin(ingredient_list)]['SEARCH_ON'].tolist()
     )
 
     st.write("Search terms to use:")
