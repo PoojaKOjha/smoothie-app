@@ -1,6 +1,5 @@
 # Import python packages
 import streamlit as st
-from snowflake.snowpark.context import get_active_session
 from snowflake.snowpark.functions import col, when_matched
 
 # Write directly to the app
@@ -8,7 +7,8 @@ st.title(":cup_with_straw: Pending Smoothie Orders! :cup_with_straw:")
 st.write("Orders that need to be filled.")
 
 # Connect to Snowflake
-session = get_active_session()
+cnx = st.connection("snowf lake")
+session = cnx. session()
 
 # Load only unfilled orders
 my_dataframe = (
