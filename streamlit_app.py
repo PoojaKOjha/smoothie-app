@@ -1,95 +1,98 @@
 # Import python packages
 import streamlit as st
+import pandas as pd
+import requests
 from snowflake.snowpark.functions import col, when_matched
 
-# Write directly to the app
+# -----------------------------
+# PAGE TITLE
+# -----------------------------
 st.title(":cup_with_straw: Pending Smoothie Orders! :cup_with_straw:")
 st.write("Orders that need to be filled.")
 
-# Connect to Snowflake
+# -----------------------------
+# CONNECT TO SNOWFLAKE
+# -----------------------------
 cnx = st.connection("snowflake")
-session = cnx. session()
-my_dataframe = session.table("smoothies.public.fruit_options").select(
+session = cnx.session()
+
+# -----------------------------
+# PART 1 — FRUIT OPTIONS TABLE
+# -----------------------------
+fruit_df_sp = session.table("smoothies.public.fruit_options").select(
     col('FRUIT_NAME'),
     col('SEARCH_ON')
 )
 
-st.dataframe(data=my_dataframe, use_container_width=True)
+st.subheader("Fruit Options Table")
+st.dataframe(fruit_df_sp, use_container_width=True)
 
-# Convert Snowpark DataFrame to pandas DataFrame
-df = my_dataframe.to_pandas()
+# Convert Snowpark → Pandas
+fruit_df = fruit_df_sp.to_pandas()
 
-# Multiselect shows FRUIT_NAME
+# -----------------------------
+# PART 2 — MULTISELECT USING FRUIT_NAME
+# -----------------------------
 ingredient_list = st.multiselect(
     'Choose up to 5 ingredients:',
-    df['FRUIT_NAME'].tolist(),
+    fruit_df['FRUIT_NAME'].tolist(),
     max_selections=5
 )
 
-# Convert chosen fruit names into their SEARCH_ON values
+# -----------------------------
+# PART 3 — LOOP THROUGH SELECTED FRUITS
+# -----------------------------
 if ingredient_list:
-    search_values = (
-        df[df['FRUIT_NAME'].isin(ingredient_list)]['SEARCH_ON'].tolist()
-    )
+    for fruit_chosen in ingredient_list:
 
-    st.write("Search terms to use:")
-    st.write(search_values)
+        # Get correct search term
+        search_on = fruit_df.loc[
+            fruit_df['FRUIT_NAME'] == fruit_chosen,
+            'SEARCH_ON'
+        ].iloc[0]
 
-# Load only unfilled orders
-my_dataframe = (
+        st.write(f"The search value for {fruit_chosen} is {search_on}.")
+
+        st.subheader(f"{fruit_chosen} Nutrition Information")
+
+        # Fruityvice API call using SEARCH_ON
+        fruityvice_response = requests.get(
+            "https://fruityvice.com/api/fruit/" + search_on
+        )
+
+        fruityvice_json = fruityvice_response.json()
+        st.json(fruityvice_json)
+
+# -----------------------------
+# PART 4 — PENDING ORDERS TABLE
+# -----------------------------
+st.subheader("Pending Orders")
+
+orders_sp = (
     session.table("smoothies.public.orders")
     .filter(col("ORDER_FILLED") == False)
 )
 
-ingredients_list = st.multiselect(
-    'Choose up to 5 ingredients:',
-    my_dataframe,
-    max_selections=5
-)
+st.dataframe(orders_sp, use_container_width=True)
 
+# -----------------------------
+# PART 5 — EDIT PENDING ORDERS
+# -----------------------------
+editable_df = st.data_editor(orders_sp)
 
-if ingredients_list:
-    ingredients_string = ''
-    for fruit_chosen in ingredients_list:
-        ingredients_string += fruit_chosen + ' '
-        st.subheader(fruit_chosen + 'Nutrition Information')
-        smoothiefroot_response = requests.get("https://my.smoothiefroot.com/api/fruit/watermelon" + fruit_chosen)
-        sf_df = st.dataframe(data=smoothiefroot_response.json(), use_container_width=True)
+submitted = st.button("Submit Updates")
 
-    
-    my_insert_stmt = """ insert into smoothies.public.orders (name_on_order, ingredients)
-        values ('""" + name_on_order + """', '""" + ingredients_string + """') """
-    st.stop()
+if submitted:
+    og_dataset = session.table("smoothies.public.orders")
+    edited_dataset = session.create_dataframe(editable_df)
 
-time_to_insert = st.button('Submit Order')
-
-# If there are pending orders, show the editor
-
-
-if my_dataframe:
-    editable_df = st.data_editor(my_dataframe)
-
-    submitted = st.button('Submit')
-
-    if submitted:
-        og_dataset = session.table("smoothies.public.orders")
-        edited_dataset = session.create_dataframe(editable_df)
-
-        try:
-            og_dataset.merge(
-                edited_dataset,
-                (og_dataset['ORDER_UID'] == edited_dataset['ORDER_UID']),
-                [when_matched().update({'ORDER_FILLED': edited_dataset['ORDER_FILLED']})]
-            )
-            st.success("Order(s) Updated!", icon="👍")
-        except Exception as e:
-            st.write("Something went wrong.")
-            st.write(e)
-
-else:
-    st.success("There are no pending orders right now.", icon="👍")
-
-import requests  
-smoothiefroot_response = requests.get("https://my.smoothiefroot.com/api/fruit/watermelon")  
-st.text(smoothiefroot_response)
-sf_df = st.dataframe(data=smoothiefroot_response.json(), use_container_width=True)
+    try:
+        og_dataset.merge(
+            edited_dataset,
+            (og_dataset['ORDER_UID'] == edited_dataset['ORDER_UID']),
+            [when_matched().update({'ORDER_FILLED': edited_dataset['ORDER_FILLED']})]
+        )
+        st.success("Order(s) Updated!", icon="👍")
+    except Exception as e:
+        st.error("Something went wrong.")
+        st.write(e)
